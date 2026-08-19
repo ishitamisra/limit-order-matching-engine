@@ -1,0 +1,7 @@
+build/
+*.o
+*.out
+compile_commands.json
+.cache/
+perf.data*
+*.svg
