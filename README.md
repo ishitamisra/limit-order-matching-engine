@@ -14,15 +14,22 @@ comparison to make lock contention visible as a number, not just a claim.
 ```sh
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j"$(nproc)"
-ctest --test-dir build --output-on-failure   # unit tests
-./build/lob_demo                             # interactive REPL
+cd build && ctest --output-on-failure && cd ..   # unit tests
+./build/lob_demo                                 # interactive terminal REPL
+./build/lob_server 8080                          # web UI: http://localhost:8080
 ./build/lob_bench [orders] [threads] [orders_per_thread]  # benchmark
 ```
 
 Requires a C++17 compiler, CMake 3.16+, and threading support (pthreads
 on Linux/macOS). No third-party dependencies — the test framework is a
-~30-line header (`tests/test_framework.hpp`); pulling in Catch2/GTest
-felt like overkill for two small test files.
+~30-line header (`tests/test_framework.hpp`) and the web UI is a hand-rolled
+HTTP server (`src/http_server.cpp`) serving a single embedded HTML page;
+pulling in Catch2/GTest or a real web framework felt like overkill for
+what this project needs.
+
+(If your `ctest` predates CMake 3.20, it doesn't understand `--test-dir`
+and will silently report every test "Not Run" — `cd build` first, as
+above, works on any version.)
 
 ## Interactive demo
 
@@ -48,6 +55,26 @@ The incoming buy at 101 crosses the book: it fills against the *cheaper*
 resting order first (100, price priority) even though that order arrived
 second, then spills into the next price level for its remaining 2 shares.
 
+## Web UI
+
+```sh
+./build/lob_server 8080   # then open http://localhost:8080
+```
+
+![Web UI showing a live depth ladder, order entry form, and trade tape](docs/web-ui.png)
+
+A live view of the same engine the REPL and benchmark drive: a
+depth-proportional bid/ask ladder, an order entry form (limit/market,
+buy/sell), a running trade tape, and a "seed liquidity" button that
+populates the book with random two-sided resting orders so it doesn't
+start empty. The page polls a small JSON API every 400ms — no
+frameworks, no build step, single embedded HTML file
+(`include/lob/web_ui.hpp`) served by a ~150-line hand-rolled HTTP server
+(`src/http_server.cpp`). Endpoints: `GET /api/book`, `GET /api/trades`,
+`POST /api/order`, `POST /api/cancel`, `POST /api/seed` — see
+`src/server_main.cpp`, which is a thin translation layer only; all
+matching logic still lives in `OrderBook`/`MatchingEngine`.
+
 ## Architecture
 
 ```
@@ -56,7 +83,11 @@ include/lob/order_pool.hpp       fixed-block allocator for Order (no malloc per 
 include/lob/order_book.hpp       single-symbol OrderBook + PriceLevel (the matching core)
 src/order_book.cpp
 include/lob/matching_engine.hpp  thread-safe, multi-symbol wrapper (sharded by symbol)
-src/main.cpp                     interactive CLI demo
+include/lob/http_server.hpp      minimal HTTP/1.1 server (used only by lob_server)
+src/http_server.cpp
+include/lob/web_ui.hpp           embedded HTML/CSS/JS for the web UI
+src/server_main.cpp              REST API + web UI, thin wrapper over MatchingEngine
+src/main.cpp                     interactive terminal REPL demo
 bench/benchmark.cpp              throughput + latency percentile benchmark
 tests/                           unit tests (ctest)
 ```

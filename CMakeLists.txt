@@ -11,10 +11,12 @@ endif()
 
 find_package(Threads REQUIRED)
 
-# Core engine as a static library so the demo CLI, benchmark, and tests
-# all link the same compiled code instead of recompiling it three times.
+# Core engine as a static library so the demo CLI, benchmark, tests, and
+# web server all link the same compiled code instead of recompiling it
+# repeatedly.
 add_library(lob STATIC
   src/order_book.cpp
+  src/http_server.cpp
 )
 target_include_directories(lob PUBLIC include)
 target_link_libraries(lob PUBLIC Threads::Threads)
@@ -33,6 +35,9 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
   # builds with optimizations on via the top-level Release build type.
   target_compile_options(lob_bench PRIVATE -g)
 endif()
+
+add_executable(lob_server src/server_main.cpp)
+target_link_libraries(lob_server PRIVATE lob)
 
 enable_testing()
 
